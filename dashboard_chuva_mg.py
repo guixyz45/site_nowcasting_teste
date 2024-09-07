@@ -6,7 +6,7 @@ import leafmap.foliumap as leafmap
 
 # URLs e caminhos de arquivos
 shp_mg_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
-csv_file_path = 'input/lista_das_estacoes_CEMADEN_13maio2024.csv'
+csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(shp_mg_url)
