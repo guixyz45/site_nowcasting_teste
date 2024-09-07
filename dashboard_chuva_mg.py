@@ -20,10 +20,6 @@ gdf_mg = gpd.sjoin(gdf, mg_gdf, predicate='within')
 # Função principal do dashboard
 def main():
     st.title("Dashboard de Chuva - Minas Gerais")
-    
-    # Exibir o DataFrame filtrado
-    st.subheader("Dados de Estações Pluviométricas em Minas Gerais")
-    st.write(gdf_mg[['Código', 'Nome', 'Latitude', 'Longitude']])
 
     # Mapa interativo usando Leafmap
     st.subheader("Mapa de Estações Pluviométricas em Minas Gerais")
