@@ -1,12 +1,11 @@
 import streamlit as st
 import pandas as pd
 import geopandas as gpd
-from salem import GeoTiff, Map
 import leafmap.foliumap as leafmap
 
 # URLs e caminhos de arquivos
 shp_mg_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
-csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
+csv_file_path = 'caminho/para/seu/arquivo/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(shp_mg_url)
@@ -16,7 +15,7 @@ df = pd.read_csv(csv_file_path)
 gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['Longitude'], df['Latitude']))
 
 # Realizar o filtro espacial: apenas estações dentro de Minas Gerais
-gdf_mg = gpd.sjoin(gdf, mg_gdf, op='within')
+gdf_mg = gpd.sjoin(gdf, mg_gdf, predicate='within')
 
 # Função principal do dashboard
 def main():
