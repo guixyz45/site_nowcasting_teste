@@ -1,42 +1,39 @@
 import streamlit as st
 import pandas as pd
+import geopandas as gpd
+from salem import GeoTiff, Map
 import leafmap.foliumap as leafmap
 
-# Carregar os dados de chuva (substitua o caminho pelo seu arquivo de dados)
-@st.cache
-def load_data():
-    # Exemplo de dados fictícios, você deve carregar seus próprios dados
-    data = pd.DataFrame({
-        'Municipio': ['Belo Horizonte', 'Uberlândia', 'Juiz de Fora', 'Montes Claros', 'Governador Valadares'],
-        'Latitude': [-19.9245, -18.9128, -21.7596, -16.7282, -18.8500],
-        'Longitude': [-43.9352, -48.2754, -43.3390, -43.8616, -41.9450],
-        'Precipitacao': [100, 150, 120, 90, 200]  # em mm
-    })
-    return data
+# URLs e caminhos de arquivos
+shp_mg_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
+csv_file_path = 'input/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
-# Função principal
+# Carregar os dados do shapefile de Minas Gerais
+mg_gdf = gpd.read_file(shp_mg_url)
+
+# Carregar os dados das estações
+df = pd.read_csv(csv_file_path)
+gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['Longitude'], df['Latitude']))
+
+# Realizar o filtro espacial: apenas estações dentro de Minas Gerais
+gdf_mg = gpd.sjoin(gdf, mg_gdf, op='within')
+
+# Função principal do dashboard
 def main():
     st.title("Dashboard de Chuva - Minas Gerais")
     
-    # Carregar os dados
-    data = load_data()
-
-    # Exibir o DataFrame
-    st.subheader("Dados de Precipitação")
-    st.write(data)
+    # Exibir o DataFrame filtrado
+    st.subheader("Dados de Estações Pluviométricas em Minas Gerais")
+    st.write(gdf_mg[['Código', 'Nome', 'Latitude', 'Longitude']])
 
     # Mapa interativo usando Leafmap
-    st.subheader("Mapa de Precipitação")
+    st.subheader("Mapa de Estações Pluviométricas em Minas Gerais")
     m = leafmap.Map(center=[-18.5122, -44.5550], zoom=6)
 
-    for i, row in data.iterrows():
-        m.add_marker(location=[row['Latitude'], row['Longitude']], popup=f"{row['Municipio']}: {row['Precipitacao']} mm")
+    for i, row in gdf_mg.iterrows():
+        m.add_marker(location=[row['Latitude'], row['Longitude']], popup=f"{row['Nome']} (Código: {row['Código']})")
 
     m.to_streamlit()
-
-    # Gráfico de precipitação
-    st.subheader("Gráfico de Precipitação por Município")
-    st.bar_chart(data.set_index('Municipio')['Precipitacao'])
 
 if __name__ == "__main__":
     main()
