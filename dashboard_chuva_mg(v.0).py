@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import geopandas as gpd
 import requests
-import calendar
+from datetime import datetime, timedelta
 import leafmap.foliumap as leafmap
 
 # URLs e caminhos de arquivos
@@ -11,7 +11,7 @@ csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
-senha = 'gLs24@ImgBr!'
+senha = 'gLs24@ImgBR!'
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(shp_mg_url)
@@ -72,17 +72,13 @@ def main():
     sigla_estado = 'MG'
 
     # Seleção de datas
-    data_inicial = st.sidebar.date_input("Data Inicial", value=pd.to_datetime('2023-01-01'))
-    data_final = st.sidebar.date_input("Data Final", value=pd.to_datetime('2023-12-31'))
+    data_inicial = st.sidebar.date_input("Data Inicial", value=datetime(2023, 1, 1))
+    data_final = st.sidebar.date_input("Data Final", value=datetime(2023, 12, 31))
 
     if st.sidebar.button("Baixar Dados"):
         # Converter datas para o formato necessário
-        anoi, mesi, diai = data_inicial.year, data_inicial.month, data_inicial.day
-        anof, mesf, diaf = data_final.year, data_final.month, data_final.day
-        diaf = str(calendar.monthrange(anof, mesf)[1])  # Último dia do mês final
-
-        data_inicial_str = f'{anoi:04d}{mesi:02d}{diai:02d}'
-        data_final_str = f'{anof:04d}{mesf:02d}{diaf:02d}'
+        data_inicial_str = data_inicial.strftime('%Y%m%d')
+        data_final_str = data_final.strftime('%Y%m%d')
 
         # Baixar os dados da estação
         dados_estacao = baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial_str, data_final_str, login, senha)
