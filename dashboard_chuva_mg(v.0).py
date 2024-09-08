@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import geopandas as gpd
 import requests
+import calendar
 import leafmap.foliumap as leafmap
 
 # URLs e caminhos de arquivos
@@ -55,16 +56,26 @@ def baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final,
 def main():
     st.title("Dashboard de Chuva - Minas Gerais")
 
-    # Inputs do usuário
-    estacao_selecionada = st.selectbox("Selecione a Estação", gdf_mg['Nome'].unique())
-    codigo_estacao = gdf_mg[gdf_mg['Nome'] == estacao_selecionada]['Código'].values[0]
+    # Sidebar para seleção de estação e datas
+    st.sidebar.header("Filtros de Seleção")
+    
+    # Opções de seleção: Nome ou Código
+    modo_selecao = st.sidebar.radio("Selecionar Estação por:", ('Nome', 'Código'))
+    
+    if modo_selecao == 'Nome':
+        estacao_selecionada = st.sidebar.selectbox("Selecione a Estação", gdf_mg['Nome'].unique())
+        codigo_estacao = gdf_mg[gdf_mg['Nome'] == estacao_selecionada]['Código'].values[0]
+    else:
+        codigo_estacao = st.sidebar.selectbox("Selecione o Código da Estação", gdf_mg['Código'].unique())
+        estacao_selecionada = gdf_mg[gdf_mg['Código'] == codigo_estacao]['Nome'].values[0]
+    
     sigla_estado = 'MG'
 
     # Seleção de datas
-    data_inicial = st.date_input("Data Inicial", value=pd.to_datetime('2023-01-01'))
-    data_final = st.date_input("Data Final", value=pd.to_datetime('2023-12-31'))
+    data_inicial = st.sidebar.date_input("Data Inicial", value=pd.to_datetime('2023-01-01'))
+    data_final = st.sidebar.date_input("Data Final", value=pd.to_datetime('2023-12-31'))
 
-    if st.button("Baixar Dados"):
+    if st.sidebar.button("Baixar Dados"):
         # Converter datas para o formato necessário
         anoi, mesi, diai = data_inicial.year, data_inicial.month, data_inicial.day
         anof, mesf, diaf = data_final.year, data_final.month, data_final.day
@@ -77,7 +88,7 @@ def main():
         dados_estacao = baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial_str, data_final_str, login, senha)
         
         if not dados_estacao.empty:
-            st.subheader(f"Dados da Estação: {estacao_selecionada}")
+            st.subheader(f"Dados da Estação: {estacao_selecionada} (Código: {codigo_estacao})")
             st.write(dados_estacao)
         else:
             st.warning("Nenhum dado encontrado para o período selecionado.")
