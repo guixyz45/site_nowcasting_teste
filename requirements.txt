@@ -4,3 +4,4 @@ pandas
 geopandas
 leafmap
 salem
+requests
