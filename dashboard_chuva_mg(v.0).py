@@ -28,6 +28,20 @@ gdf_mg = gpd.sjoin(gdf, mg_gdf, predicate='within')
 token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
 login_payload = {'email': login, 'password': senha}
 response = requests.post(token_url, json=login_payload)
+# Verifica se a requisição foi bem-sucedida
+if response.status_code == 200:
+    content = response.json()
+    
+    # Verifica se o 'token' está presente no conteúdo
+    if 'token' in content:
+        token = content['token']
+    else:
+        st.error("Erro: Token não encontrado na resposta. Verifique o login e senha.")
+        st.stop()  # Interrompe a execução do código se o token não for encontrado
+else:
+    st.error(f"Erro na solicitação do token: {response.status_code}")
+    st.error(response.text)  # Exibe a resposta de erro da API para depuração
+    st.stop()  # Interrompe a execução do código se a requisição falhar
 content = response.json()
 token = content['token']
 
