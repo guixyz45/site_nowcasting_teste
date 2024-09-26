@@ -4,7 +4,6 @@ import geopandas as gpd
 import requests
 from datetime import datetime, timedelta
 import leafmap.foliumap as leafmap
-import folium
 
 # URLs e caminhos de arquivos
 shp_mg_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
@@ -12,7 +11,7 @@ csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
-senha = 'gLs24@ImgBr!'
+senha = 'gLs24@ImgBR!'
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(shp_mg_url)
@@ -23,62 +22,6 @@ gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['Longitude'], df['Lati
 
 # Realizar o filtro espacial: apenas estações dentro de Minas Gerais
 gdf_mg = gpd.sjoin(gdf, mg_gdf, predicate='within')
-
-# Recuperação do token
-token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
-login_payload = {'email': login, 'password': senha}
-response = requests.post(token_url, json=login_payload)
-# Verifica se a requisição foi bem-sucedida
-if response.status_code == 200:
-    content = response.json()
-    
-    # Verifica se o 'token' está presente no conteúdo
-    if 'token' in content:
-        token = content['token']
-    else:
-        st.error("Erro: Token não encontrado na resposta. Verifique o login e senha.")
-        st.stop()  # Interrompe a execução do código se o token não for encontrado
-else:
-    st.error(f"Erro na solicitação do token: {response.status_code}")
-    st.error(response.text)  # Exibe a resposta de erro da API para depuração
-    st.stop()  # Interrompe a execução do código se a requisição falhar
-content = response.json()
-token = content['token']
-
-# Função para baixar os dados da estação e retornar a soma do último mês
-def baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final, login, senha):
-    # Lista para armazenar os dados
-    dfs = []
-
-    # Loop para baixar os dados mês a mês
-    for ano_mes_dia in pd.date_range(data_inicial, data_final, freq='1M'):
-        ano_mes = ano_mes_dia.strftime('%Y%m')
-        sws_url = 'http://sws.cemaden.gov.br/PED/rest/pcds/df_pcd'
-        params = dict(rede=11, uf=sigla_estado, inicio=ano_mes, fim=ano_mes, codigo=codigo_estacao)
-        r = requests.get(sws_url, params=params, headers={'token': token})
-
-        # Se há dados, adiciona ao DataFrame
-        if r.text:
-            df_mes = pd.read_csv(pd.compat.StringIO(r.text))
-            dfs.append(df_mes)
-
-        # Verifica se há dados baixados
-        if dfs:
-            dados_completos = pd.concat(dfs, ignore_index=True)
-    
-            # Converte a coluna 'Data' para o formato datetime (caso ainda não esteja)
-            dados_completos['datahora'] = pd.to_datetime(dados_completos['datahora'], format='%Y-%m-%d %H:%M:%S')
-    
-            # Filtrar o último mês dos dados baixados
-            ultimo_mes = dados_completos['datahora'].max().strftime('%Y-%m')  # Filtra pelo ano e mês
-            dados_ultimo_mes = dados_completos[dados_completos['datahora'].dt.strftime('%Y-%m') == ultimo_mes]
-    
-            # Calcula a soma dos valores do último mês (assumindo que a coluna de valores seja chamada 'Valor')
-            soma_ultimo_mes = dados_ultimo_mes['valor'].sum()
-    
-            return dados_completos, soma_ultimo_mes
-        else:
-            return pd.DataFrame(), 0
 
 # Função principal do dashboard
 def main():
@@ -114,11 +57,11 @@ def main():
     # Mapa interativo usando Leafmap
     m = leafmap.Map(center=[-18.5122, -44.5550], zoom=7, draw_control=False, measure_control=False, fullscreen_control=False, attribution_control=True)
 
-    # Adiciona o shapefile de Minas Gerais ao mapa sem popups, tooltips ou alterações no cursor
+    # Adiciona o shapefile de Minas Gerais ao mapa
     m.add_gdf(
         mg_gdf, 
         layer_name="Minas Gerais", 
-        style={"color": "black", "weight": 1, "fillOpacity": 0, "interactive": False},  # 'interactive': False evita interações
+        style={"color": "black", "weight": 1, "fillOpacity": 0, "interactive": False},
         info_mode=None
     )
 
@@ -158,29 +101,27 @@ def main():
         # Converter datas para o formato necessário
         data_inicial_str = data_inicial.strftime('%Y%m%d')
         data_final_str = data_final.strftime('%Y%m%d')
-        # Baixar os dados da estação e obter a soma do último mês
-        dados_estacao, soma_ultimo_mes = baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final, login, senha)
+        
+        # Exibir os dados da estação (mock)
+        st.subheader(f"Dados da Estação: {estacao_selecionada} (Código: {codigo_estacao})")
+        st.write("Dados simulados aqui...")
 
-        if not dados_estacao.empty:
-            st.subheader(f"Dados da Estação: {estacao_selecionada} (Código: {codigo_estacao})")
-            st.write(dados_estacao)
-        else:
-            st.warning("Nenhum dado encontrado para o período selecionado.")
-
-    # Adiciona marcadores ao mapa com ícones personalizados
+    # Adiciona marcadores ao mapa com popups estilizados
     for i, row in gdf_mg.iterrows():
         estacao_nome = row['Nome']
         codigo_estacao = row['Código']
-        
-        # Define o estilo do ícone
-        marker_icon = folium.Icon(color="blue", icon="cloud", prefix='fa')
 
-        # Adiciona o marcador ao mapa com o ícone personalizado
-        folium.Marker(
-            location=[row['Latitude'], row['Longitude']], 
-            popup=f"{estacao_nome} (Código: {codigo_estacao})",
-            icon=marker_icon
-        ).add_to(m)
+        # Conteúdo estilizado do popup
+        popup_content = f"""
+        <div style="font-family: Arial; border-radius: 10px; padding: 10px; background-color: #f9f9f9; box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);">
+            <h4 style="margin-bottom: 5px; color: #2b6cb0;">{estacao_nome}</h4>
+            <p style="margin: 0;"><strong>Código:</strong> {codigo_estacao}</p>
+            <p style="margin: 0;"><strong>Latitude:</strong> {row['Latitude']}</p>
+            <p style="margin: 0;"><strong>Longitude:</strong> {row['Longitude']}</p>
+        </div>
+        """
+        # Adiciona o marcador com popup estilizado
+        m.add_marker(location=[row['Latitude'], row['Longitude']], popup=popup_content)
 
     # Exibe o mapa no Streamlit
     m.to_streamlit()
