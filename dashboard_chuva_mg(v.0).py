@@ -6,13 +6,17 @@ from datetime import datetime, timedelta
 import leafmap.foliumap as leafmap
 import folium  # Import necessário para personalizar ícones
 
-# URLs e caminhos de arquivos
-shp_mg_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
+# URLs do shapefile para todos os estados e de Minas Gerais
+brasil_shp_url = 'https://github.com/codeforamerica/click_that_hood/blob/master/public/data/brazil-states.geojson?raw=true'
+mg_shp_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
 csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
 senha = 'gLs24@ImgBr!'
+
+# Carregar o shapefile de todos os estados do Brasil
+brasil_gdf = gpd.read_file(brasil_shp_url)
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(shp_mg_url)
@@ -107,6 +111,31 @@ def main():
         style={"color": "black", "weight": 1, "fillOpacity": 0, "interactive": False},  # 'interactive': False evita interações
         info_mode=None
     )
+
+    # Adicionar a máscara: outros estados do Brasil com opacidade baixa
+for _, row in brasil_gdf.iterrows():
+    if row['name'] != 'Minas Gerais':
+        folium.GeoJson(
+            row['geometry'],
+            style_function=lambda feature: {
+                'fillColor': 'gray',
+                'color': 'black',
+                'weight': 1,
+                'fillOpacity': 0.2,  # Opacidade menor para outros estados
+            }
+        ).add_to(m)
+
+# Adicionar Minas Gerais com opacidade total
+folium.GeoJson(
+    mg_gdf,
+    style_function=lambda feature: {
+        'fillColor': 'green',
+        'color': 'black',
+        'weight': 2,
+        'fillOpacity': 1  # Opacidade total para Minas Gerais
+    },
+    name='Minas Gerais'
+).add_to(m)
 
     # Sidebar para seleção de estação e datas
     st.sidebar.header("Filtros de Seleção")
