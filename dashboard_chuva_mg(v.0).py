@@ -7,13 +7,13 @@ import leafmap.foliumap as leafmap
 import folium
 
 # URLs e caminhos de arquivos
-brasil_shp_url = 'https://github.com/codeforgermany/click_that_hood/blob/main/public/data/brazil-states.geojson'
+brasil_shp_url = 'https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson'
 mg_shp_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
 csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
-senha = 'gLs24@ImgBR!'
+senha = 'gLs24@ImgBr!'
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(mg_shp_url)
