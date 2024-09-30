@@ -113,11 +113,11 @@ def main():
     )
 
     # Adicionar a máscara: outros estados do Brasil com opacidade baixa
-for _, row in brasil_gdf.iterrows():
-    if row['name'] != 'Minas Gerais':
-        folium.GeoJson(
-            row['geometry'],
-            style_function=lambda feature: {
+        for _, row in brasil_gdf.iterrows():
+            if row['name'] != 'Minas Gerais':
+                folium.GeoJson(
+                row['geometry'],
+                style_function=lambda feature: {
                 'fillColor': 'gray',
                 'color': 'black',
                 'weight': 1,
@@ -125,17 +125,17 @@ for _, row in brasil_gdf.iterrows():
             }
         ).add_to(m)
 
-# Adicionar Minas Gerais com opacidade total
-folium.GeoJson(
-    mg_gdf,
-    style_function=lambda feature: {
+    # Adicionar Minas Gerais com opacidade total
+    folium.GeoJson(
+        mg_gdf,
+        style_function=lambda feature: {
         'fillColor': 'green',
         'color': 'black',
         'weight': 2,
         'fillOpacity': 1  # Opacidade total para Minas Gerais
-    },
-    name='Minas Gerais'
-).add_to(m)
+        },
+        name='Minas Gerais'
+    ).add_to(m)
 
     # Sidebar para seleção de estação e datas
     st.sidebar.header("Filtros de Seleção")
