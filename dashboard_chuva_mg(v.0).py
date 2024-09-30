@@ -11,7 +11,7 @@ csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
-senha = 'gLs24@ImgBR!'
+senha = 'gLs24@ImgBr!'
 
 # Recuperação do token
 token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
