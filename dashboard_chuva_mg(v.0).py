@@ -5,6 +5,7 @@ import requests
 from datetime import datetime, timedelta
 import leafmap.foliumap as leafmap
 import folium
+from folium.plugins import MarkerCluster
 
 # URLs e caminhos de arquivos
 mg_shp_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
@@ -12,7 +13,7 @@ csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
-senha = 'gLs24@ImgBr!'
+senha = 'gLs24@ImgBR!'
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(mg_shp_url)
@@ -81,13 +82,32 @@ def main():
     # Mapa interativo usando Leafmap
     m = leafmap.Map(center=[-18.5122, -44.5550], zoom=7, draw_control=False, measure_control=False, fullscreen_control=False, attribution_control=True)
 
-    # Adicionar marcadores das estações meteorológicas em Minas Gerais
+    # Adicionar o shapefile de Minas Gerais ao mapa
+    folium.GeoJson(
+        mg_gdf,
+        style_function=lambda feature: {
+            'fillColor': 'green',
+            'color': 'black',
+            'weight': 2,
+            'fillOpacity': 1
+        },
+        name='Minas Gerais'
+    ).add_to(m)
+
+    # Criar um cluster de marcadores para agrupar os marcadores no mapa
+    marker_cluster = MarkerCluster().add_to(m)
+
+    # Adicionar marcadores das estações meteorológicas em Minas Gerais no estilo fornecido
     for i, row in gdf_mg.iterrows():
-        folium.Marker(
+        folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
-            popup=f"{row['Nome']} (Código: {row['Código']})",
-            icon=folium.Icon(color="blue", icon="circle", prefix="fa")
-        ).add_to(m)
+            radius=8,  # Tamanho da bolinha
+            color='purple',  # Cor da borda
+            fill=True,
+            fill_color='green',  # Cor de preenchimento
+            fill_opacity=0.6,
+            popup=f"{row['Nome']} (Código: {row['Código']})"
+        ).add_to(marker_cluster)
 
     # Sidebar para seleção de estação e datas
     st.sidebar.header("Filtros de Seleção")
