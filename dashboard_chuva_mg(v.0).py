@@ -4,6 +4,7 @@ import geopandas as gpd
 import requests
 from datetime import datetime, timedelta
 import leafmap.foliumap as leafmap
+import folium  # Import necessário para personalizar ícones
 
 # URLs e caminhos de arquivos
 shp_mg_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
@@ -11,44 +12,7 @@ csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
-senha = 'gLs24@ImgBr!'
-
-# Recuperação do token
-token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
-login_payload = {'email': login, 'password': senha}
-response = requests.post(token_url, json=login_payload)
-content = response.json()
-token = content['token']
-
-# Função para baixar os dados da estação e retornar os dados atuais
-def baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final):
-    # Lista para armazenar os dados
-    dfs = []
-
-    # Loop para baixar os dados de acordo com o intervalo especificado
-    for ano_mes_dia in pd.date_range(data_inicial, data_final, freq='1D'):
-        ano_mes = ano_mes_dia.strftime('%Y%m%d')
-        sws_url = 'http://sws.cemaden.gov.br/PED/rest/pcds/df_pcd'
-        params = dict(rede=11, uf=sigla_estado, inicio=ano_mes, fim=ano_mes, codigo=codigo_estacao)
-        r = requests.get(sws_url, params=params, headers={'token': token})
-
-        # Se há dados, adiciona ao DataFrame
-        if r.text:
-            df_dia = pd.read_csv(pd.compat.StringIO(r.text))
-            dfs.append(df_dia)
-
-    if dfs:
-        dados_completos = pd.concat(dfs, ignore_index=True)
-        dados_completos['datahora'] = pd.to_datetime(dados_completos['datahora'], format='%Y-%m-%d %H:%M:%S')
-
-        # Filtrar o dado mais recente
-        dado_atual = dados_completos[dados_completos['datahora'] == dados_completos['datahora'].max()]
-
-        if not dado_atual.empty:
-            # Retorna o valor mais recente de precipitação
-            valor_precipitacao = dado_atual['valor'].iloc[0]
-            return valor_precipitacao
-    return None
+senha = 'gLs24@ImgBR!'
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(shp_mg_url)
@@ -59,6 +23,48 @@ gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['Longitude'], df['Lati
 
 # Realizar o filtro espacial: apenas estações dentro de Minas Gerais
 gdf_mg = gpd.sjoin(gdf, mg_gdf, predicate='within')
+
+# Recuperação do token
+token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
+login_payload = {'email': login, 'password': senha}
+response = requests.post(token_url, json=login_payload)
+content = response.json()
+token = content['token']
+
+# Função para baixar os dados da estação e retornar a soma do último mês
+def baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final, login, senha):
+    # Lista para armazenar os dados
+    dfs = []
+
+    # Loop para baixar os dados mês a mês
+    for ano_mes_dia in pd.date_range(data_inicial, data_final, freq='1M'):
+        ano_mes = ano_mes_dia.strftime('%Y%m')
+        sws_url = 'http://sws.cemaden.gov.br/PED/rest/pcds/df_pcd'
+        params = dict(rede=11, uf=sigla_estado, inicio=ano_mes, fim=ano_mes, codigo=codigo_estacao)
+        r = requests.get(sws_url, params=params, headers={'token': token})
+
+        # Se há dados, adiciona ao DataFrame
+        if r.text:
+            df_mes = pd.read_csv(pd.compat.StringIO(r.text))
+            dfs.append(df_mes)
+
+        # Verifica se há dados baixados
+        if dfs:
+            dados_completos = pd.concat(dfs, ignore_index=True)
+    
+            # Converte a coluna 'Data' para o formato datetime (caso ainda não esteja)
+            dados_completos['datahora'] = pd.to_datetime(dados_completos['datahora'], format='%Y-%m-%d %H:%M:%S')
+    
+            # Filtrar o último mês dos dados baixados
+            ultimo_mes = dados_completos['datahora'].max().strftime('%Y-%m')  # Filtra pelo ano e mês
+            dados_ultimo_mes = dados_completos[dados_completos['datahora'].dt.strftime('%Y-%m') == ultimo_mes]
+    
+            # Calcula a soma dos valores do último mês (assumindo que a coluna de valores seja chamada 'Valor')
+            soma_ultimo_mes = dados_ultimo_mes['valor'].sum()
+    
+            return dados_completos, soma_ultimo_mes
+        else:
+            return pd.DataFrame(), 0
 
 # Função principal do dashboard
 def main():
@@ -94,11 +100,11 @@ def main():
     # Mapa interativo usando Leafmap
     m = leafmap.Map(center=[-18.5122, -44.5550], zoom=7, draw_control=False, measure_control=False, fullscreen_control=False, attribution_control=True)
 
-    # Adiciona o shapefile de Minas Gerais ao mapa
+    # Adiciona o shapefile de Minas Gerais ao mapa sem popups, tooltips ou alterações no cursor
     m.add_gdf(
         mg_gdf, 
         layer_name="Minas Gerais", 
-        style={"color": "black", "weight": 1, "fillOpacity": 0, "interactive": False},
+        style={"color": "black", "weight": 1, "fillOpacity": 0, "interactive": False},  # 'interactive': False evita interações
         info_mode=None
     )
 
@@ -138,35 +144,29 @@ def main():
         # Converter datas para o formato necessário
         data_inicial_str = data_inicial.strftime('%Y%m%d')
         data_final_str = data_final.strftime('%Y%m%d')
-
         # Baixar os dados da estação e obter a soma do último mês
-        valor_precipitacao = baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final)
-        if valor_precipitacao:
-            st.subheader(f"Estação: {estacao_selecionada} (Código: {codigo_estacao})")
-            st.write(f"Valor atual de precipitação: {valor_precipitacao} mm")
+        dados_estacao, soma_ultimo_mes = baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final, login, senha)
+
+        if not dados_estacao.empty:
+            st.subheader(f"Dados da Estação: {estacao_selecionada} (Código: {codigo_estacao})")
+            st.write(dados_estacao)
         else:
             st.warning("Nenhum dado encontrado para o período selecionado.")
 
-    # Adiciona marcadores ao mapa com popups estilizados
+    # Adiciona marcadores ao mapa com ícones personalizados
     for i, row in gdf_mg.iterrows():
         estacao_nome = row['Nome']
         codigo_estacao = row['Código']
+        
+        # Ícones personalizados (pode mudar o ícone e a cor)
+        icon = folium.Icon(color='blue', icon='info-sign')
 
-        # Baixar o valor de precipitação atual para cada estação
-        valor_precipitacao = baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final)
-
-        # Conteúdo estilizado do popup
-        popup_content = f"""
-        <div style="font-family: Arial; border-radius: 10px; padding: 10px; background-color: #f9f9f9; box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);">
-            <h4 style="margin-bottom: 5px; color: #2b6cb0;">{estacao_nome}</h4>
-            <p style="margin: 0;"><strong>Código:</strong> {codigo_estacao}</p>
-            <p style="margin: 0;"><strong>Latitude:</strong> {row['Latitude']}</p>
-            <p style="margin: 0;"><strong>Longitude:</strong> {row['Longitude']}</p>
-            <p style="margin: 0;"><strong>Precipitação atual:</strong> {valor_precipitacao if valor_precipitacao else 'Sem dados'} mm</p>
-        </div>
-        """
-        # Adiciona o marcador com popup estilizado
-        m.add_marker(location=[row['Latitude'], row['Longitude']], popup=popup_content)
+        # Adiciona o marcador com ícone personalizado
+        folium.Marker(
+            location=[row['Latitude'], row['Longitude']], 
+            popup=f"{estacao_nome} (Código: {codigo_estacao})",
+            icon=icon  # Estilo de ícone aqui
+        ).add_to(m)
 
     # Exibe o mapa no Streamlit
     m.to_streamlit()
