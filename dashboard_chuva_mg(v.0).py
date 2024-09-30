@@ -159,7 +159,7 @@ def main():
         codigo_estacao = row['Código']
         
         # Ícones personalizados (pode mudar o ícone e a cor)
-        icon = folium.Icon(color='blue', icon='info-sign')
+        icon = folium.Icon(color='blue', icon='tint', prefix='fa')
 
         # Adiciona o marcador com ícone personalizado
         folium.Marker(
