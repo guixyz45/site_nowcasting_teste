@@ -90,9 +90,9 @@ def main():
         folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
             radius=8,  # Tamanho da bolinha
-            color='purple',  # Cor da borda
+            color='blue',  # Cor da borda
             fill=True,
-            fill_color='green',  # Cor de preenchimento
+            fill_color='white',  # Cor de preenchimento
             fill_opacity=0.6,
             popup=f"{row['Nome']} (Código: {row['Código']})"
         ).add_to(marker_cluster)
