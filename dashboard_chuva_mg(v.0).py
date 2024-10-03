@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import leafmap.foliumap as leafmap
 import folium
 from folium.plugins import MarkerCluster
+import plotly.express as px
 
 # URLs e caminhos de arquivos
 mg_shp_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
@@ -13,7 +14,7 @@ csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
-senha = 'gLs24@ImgBr!'
+senha = 'gLs24@ImgBR!'
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(mg_shp_url)
@@ -48,12 +49,9 @@ def baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final,
         if dfs:
             dados_completos = pd.concat(dfs, ignore_index=True)
             dados_completos['datahora'] = pd.to_datetime(dados_completos['datahora'], format='%Y-%m-%d %H:%M:%S')
-            ultimo_mes = dados_completos['datahora'].max().strftime('%Y-%m')
-            dados_ultimo_mes = dados_completos[dados_completos['datahora'].dt.strftime('%Y-%m') == ultimo_mes]
-            soma_ultimo_mes = dados_ultimo_mes['valor'].sum()
-            return dados_completos, soma_ultimo_mes
+            return dados_completos
         else:
-            return pd.DataFrame(), 0
+            return pd.DataFrame()
 
 # Função principal do dashboard
 def main():
@@ -81,7 +79,19 @@ def main():
 
     # Mapa interativo usando Leafmap
     m = leafmap.Map(center=[-18.5122, -44.5550], zoom=7, draw_control=False, measure_control=False, fullscreen_control=False, attribution_control=True)
-    
+
+    # Adicionar o shapefile de Minas Gerais ao mapa
+    folium.GeoJson(
+        mg_gdf,
+        style_function=lambda feature: {
+            'fillColor': 'green',
+            'color': 'black',
+            'weight': 2,
+            'fillOpacity': 1
+        },
+        name='Minas Gerais'
+    ).add_to(m)
+
     # Criar um cluster de marcadores para agrupar os marcadores no mapa
     marker_cluster = MarkerCluster().add_to(m)
 
@@ -90,9 +100,9 @@ def main():
         folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
             radius=8,  # Tamanho da bolinha
-            color='blue',  # Cor da borda
+            color='purple',  # Cor da borda
             fill=True,
-            fill_color='white',  # Cor de preenchimento
+            fill_color='green',  # Cor de preenchimento
             fill_opacity=0.6,
             popup=f"{row['Nome']} (Código: {row['Código']})"
         ).add_to(marker_cluster)
@@ -123,14 +133,24 @@ def main():
         data_inicial = datetime(ano_selecionado, mes_selecionado, 1)
         data_final = datetime(ano_selecionado, mes_selecionado + 1, 1) - timedelta(days=1) if mes_selecionado != 12 else datetime(ano_selecionado, 12, 31)
 
-    if st.sidebar.button("Baixar Dados"):
+    if st.sidebar.button("Mostrar Gráfico"):
         data_inicial_str = data_inicial.strftime('%Y%m%d')
         data_final_str = data_final.strftime('%Y%m%d')
-        dados_estacao, soma_ultimo_mes = baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final, login, senha)
+        dados_estacao = baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final, login, senha)
 
         if not dados_estacao.empty:
-            st.subheader(f"Dados da Estação: {estacao_selecionada} (Código: {codigo_estacao})")
-            st.write(dados_estacao)
+            st.subheader(f"Gráfico de Precipitação - Estação: {estacao_selecionada} (Código: {codigo_estacao})")
+
+            # Preparar os dados para o gráfico
+            dados_estacao['datahora'] = pd.to_datetime(dados_estacao['datahora'])
+            if tipo_busca == 'Diária':
+                dados_diarios = dados_estacao.resample('D', on='datahora').sum()
+                fig = px.line(dados_diarios, x=dados_diarios.index, y='valor', title='Precipitação Diária', labels={'valor': 'Precipitação (mm)'})
+            else:
+                dados_mensais = dados_estacao.resample('M', on='datahora').sum()
+                fig = px.bar(dados_mensais, x=dados_mensais.index, y='valor', title='Precipitação Mensal', labels={'valor': 'Precipitação (mm)'})
+
+            st.plotly_chart(fig)
         else:
             st.warning("Nenhum dado encontrado para o período selecionado.")
 
