@@ -36,7 +36,7 @@ token = content['token']
 # Função para baixar os dados da estação e retornar a soma do último mês
 def baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final, login, senha):
     dfs = []
-    for ano_mes_dia in pd.date_range(data_inicial, data_final, freq='1M'):
+    for ano_mes_dia in pd.date_range(data_inicial, data_final):
         ano_mes = ano_mes_dia.strftime('%Y%m')
         sws_url = 'http://sws.cemaden.gov.br/PED/rest/pcds/df_pcd'
         params = dict(rede=11, uf=sigla_estado, inicio=ano_mes, fim=ano_mes, codigo=codigo_estacao)
