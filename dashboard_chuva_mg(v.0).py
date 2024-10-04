@@ -124,7 +124,7 @@ def main():
     if st.sidebar.button("Mostrar Gráfico"):
         data_inicial_str = data_inicial.strftime('%Y%m%d')
         data_final_str = data_final.strftime('%Y%m%d')
-        dados_estacao = baixar_dados_estacao(codigo_estacao, sigla_estado, data_inicial, data_final, login, senha)
+        dados_estacao = baixar_dados_estacao(codigo_estacao, 'MG', data_inicial, data_final, login, senha)
 
         if not dados_estacao.empty:
             st.subheader(f"Gráfico de Precipitação - Estação: {estacao_selecionada} (Código: {codigo_estacao})")
