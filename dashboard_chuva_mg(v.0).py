@@ -10,7 +10,6 @@ import folium
 from folium.plugins import MarkerCluster
 import plotly.express as px
 
-
 # URLs e caminhos de arquivos
 mg_shp_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
 csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
@@ -23,8 +22,20 @@ senha = 'gLs24@ImgBR!'
 token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
 login_payload = {'email': login, 'password': senha}
 response = requests.post(token_url, json=login_payload)
-content = response.json()
-token = content['token']
+
+# Verificar se a resposta é válida e contém o token
+try:
+    content = response.json()
+    if isinstance(content, list):
+        st.error("Erro na autenticação: Resposta inesperada do servidor.")
+        st.stop()
+    token = content.get('token')
+    if not token:
+        st.error("Erro na autenticação: Token não encontrado na resposta.")
+        st.stop()
+except Exception as e:
+    st.error(f"Erro na autenticação: {e}")
+    st.stop()
 
 # URL e parâmetros para a requisição inicial de dados de estações
 sws_url = 'http://sws.cemaden.gov.br/PED/rest/pcds/df_pcd'
@@ -109,7 +120,7 @@ def main():
 
     # Mapa interativo usando Leafmap
     m = leafmap.Map(center=[-18.5122, -44.5550], zoom=7, draw_control=False, measure_control=False, fullscreen_control=False, attribution_control=True)
-
+    
     # Criar um cluster de marcadores para agrupar os marcadores no mapa
     marker_cluster = MarkerCluster().add_to(m)
 
