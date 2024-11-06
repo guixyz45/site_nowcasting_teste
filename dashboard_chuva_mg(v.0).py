@@ -19,6 +19,18 @@ csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 login = 'd2020028915@unifei.edu.br'
 senha = 'gLs24@ImgBR!'
 
+# Recuperação do token
+token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
+login_payload = {'email': login, 'password': senha}
+response = requests.post(token_url, json=login_payload)
+content = response.json()
+token = content['token']
+
+# URL e parâmetros para a requisição inicial de dados de estações
+sws_url = 'http://sws.cemaden.gov.br/PED/rest/pcds/df_pcd'
+params = dict(rede=11, uf='MG')
+r = requests.get(sws_url, params=params, headers={'token': token})
+
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(mg_shp_url)
 
@@ -98,18 +110,6 @@ def main():
     # Mapa interativo usando Leafmap
     m = leafmap.Map(center=[-18.5122, -44.5550], zoom=7, draw_control=False, measure_control=False, fullscreen_control=False, attribution_control=True)
 
-    # Adicionar o shapefile de Minas Gerais ao mapa
-    folium.GeoJson(
-        mg_gdf,
-        style_function=lambda feature: {
-            'fillColor': 'green',
-            'color': 'black',
-            'weight': 2,
-            'fillOpacity': 1
-        },
-        name='Minas Gerais'
-    ).add_to(m)
-
     # Criar um cluster de marcadores para agrupar os marcadores no mapa
     marker_cluster = MarkerCluster().add_to(m)
 
@@ -118,9 +118,9 @@ def main():
         folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
             radius=8,  # Tamanho da bolinha
-            color='purple',  # Cor da borda
+            color='blue',  # Cor da borda
             fill=True,
-            fill_color='green',  # Cor de preenchimento
+            fill_color='white',  # Cor de preenchimento
             fill_opacity=0.6,
             popup=f"{row['Nome']} (Código: {row['Código']})"
         ).add_to(marker_cluster)
