@@ -103,19 +103,7 @@ def main():
 
     # Mapa interativo usando Leafmap
     m = leafmap.Map(center=[-18.5122, -44.5550], zoom=7, draw_control=False, measure_control=False, fullscreen_control=False, attribution_control=True)
-
-    # Adicionar o shapefile de Minas Gerais ao mapa
-    folium.GeoJson(
-        mg_gdf,
-        style_function=lambda feature: {
-            'fillColor': 'green',
-            'color': 'black',
-            'weight': 2,
-            'fillOpacity': 1
-        },
-        name='Minas Gerais'
-    ).add_to(m)
-
+    
     # Criar um cluster de marcadores para agrupar os marcadores no mapa
     marker_cluster = MarkerCluster().add_to(m)
 
@@ -124,9 +112,9 @@ def main():
         folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
             radius=8,  # Tamanho da bolinha
-            color='purple',  # Cor da borda
+            color='blue',  # Cor da borda
             fill=True,
-            fill_color='green',  # Cor de preenchimento
+            fill_color='white',  # Cor de preenchimento
             fill_opacity=0.6,
             popup=f"{row['Nome']} (Código: {row['Código']})"
         ).add_to(marker_cluster)
