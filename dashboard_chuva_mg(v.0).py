@@ -17,7 +17,14 @@ csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
-senha = 'gLs24@ImgBR!'
+senha = 'gLs24@ImgBr!'
+
+# Recuperação do token
+token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
+login_payload = {'email': login, 'password': senha}
+response = requests.post(token_url, json=login_payload)
+content = response.json()
+token = content['token']
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(mg_shp_url)
