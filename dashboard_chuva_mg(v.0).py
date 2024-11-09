@@ -10,10 +10,9 @@ import folium
 from folium.plugins import MarkerCluster
 import plotly.express as px
 
-
 # URLs e caminhos de arquivos
 mg_shp_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
-csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
+csv_file_path = 'input/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
@@ -118,10 +117,10 @@ def main():
     for i, row in gdf_mg.iterrows():
         folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
-            radius=8,  # Tamanho da bolinha
-            color='blue',  # Cor da borda
+            radius=8,
+            color='blue',
             fill=True,
-            fill_color='white',  # Cor de preenchimento
+            fill_color='white',
             fill_opacity=0.6,
             popup=f"{row['Nome']} (Código: {row['Código']})"
         ).add_to(marker_cluster)
@@ -153,14 +152,13 @@ def main():
         data_final = datetime(ano_selecionado, mes_selecionado + 1, 1) - timedelta(days=1) if mes_selecionado != 12 else datetime(ano_selecionado, 12, 31)
 
     if st.sidebar.button("Mostrar Gráfico"):
-        data_inicial_str = data_inicial.strftime('%Y%m%d')
-        data_final_str = data_final.strftime('%Y%m%d')
+        data_inicial_str = data_inicial.strftime('%Y%m%d%H%M')
+        data_final_str = data_final.strftime('%Y%m%d%H%M')
         dados_estacao = request_data(data_inicial_str, data_final_str, sigla_estado, estacao_selecionada)
 
         if not dados_estacao.empty:
             st.subheader(f"Gráfico de Precipitação - Estação: {estacao_selecionada} (Código: {codigo_estacao})")
 
-            # Preparar os dados para o gráfico
             dados_estacao['datahora'] = pd.to_datetime(dados_estacao['datahora'])
             if tipo_busca == 'Diária':
                 dados_diarios = dados_estacao.resample('D', on='datahora').sum()
