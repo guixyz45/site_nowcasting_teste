@@ -1,72 +1,35 @@
 import streamlit as st
-import pandas as pd
-import geopandas as gpd
+import leafmap.foliumap as leafmap
 import requests
+import pandas as pd
 import io
 import numpy as np
 from datetime import datetime, timedelta
-import leafmap.foliumap as leafmap
-import folium
-from folium.plugins import MarkerCluster
-import plotly.express as px
-
-# URLs e caminhos de arquivos
-mg_shp_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
-csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
-senha = 'gLs24@ImgBR!'
+senha = 'gLs24@ImgBr!'
 
 # Recuperação do token
-token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
-login_payload = {'email': login, 'password': senha}
-response = requests.post(token_url, json=login_payload)
-
-# Verificar se a resposta é válida e contém o token
-try:
+def get_token():
+    token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
+    login_payload = {'email': login, 'password': senha}
+    response = requests.post(token_url, json=login_payload)
     content = response.json()
-    if isinstance(content, list):
-        st.error("Erro na autenticação: Resposta inesperada do servidor.")
-        st.stop()
-    token = content.get('token')
-    if not token:
-        st.error("Erro na autenticação: Token não encontrado na resposta.")
-        st.stop()
-except Exception as e:
-    st.error(f"Erro na autenticação: {e}")
-    st.stop()
+    return content['token']
 
-# URL e parâmetros para a requisição inicial de dados de estações
-sws_url = 'http://sws.cemaden.gov.br/PED/rest/pcds/df_pcd'
-params = dict(rede=11, uf='MG')
-r = requests.get(sws_url, params=params, headers={'token': token})
-
-# Carregar os dados do shapefile de Minas Gerais
-mg_gdf = gpd.read_file(mg_shp_url)
-
-# Carregar os dados das estações
-df = pd.read_csv(csv_file_path)
-gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['Longitude'], df['Latitude']))
-
-# Realizar o filtro espacial: apenas estações dentro de Minas Gerais
-gdf_mg = gpd.sjoin(gdf, mg_gdf, predicate='within')
-
-# Função de solicitação de dados de precipitação
+# Função para solicitar dados de precipitação ao CEMADEN
 def request_data(inicio, fim, uf, municipio, sws_url="http://sws.cemaden.gov.br/PED/rest/pcds/dados_rede"):
-    date = datetime.strptime(inicio, "%Y%m%d%H%M")  # Convert inicio to datetime object
-    fim = datetime.strptime(fim, "%Y%m%d%H%M")    # Convert fim to datetime object
+    token = get_token()  # Recupera o token
+    date = datetime.strptime(inicio, "%Y%m%d%H%M")
+    fim = datetime.strptime(fim, "%Y%m%d%H%M")
     combined_df = None
 
     while date <= fim:
-        print(f"Requesting data from: {date}")
         start_date = date.strftime("%Y%m%d%H%M")
         end_date = (date + timedelta(days=1)).strftime("%Y%m%d%H%M")
         params = dict(sensor=10, uf=uf, municipio=municipio, inicio=start_date, fim=end_date, formato="json")
-
         r = requests.get(sws_url, params=params, headers={'token': token})
-
-        # Use StringIO to create a file-like object from the response text
         data = io.StringIO(r.text)
 
         try:
@@ -74,16 +37,11 @@ def request_data(inicio, fim, uf, municipio, sws_url="http://sws.cemaden.gov.br/
             df = df.drop(columns=['sensor', 'qualificacao', 'offset'])
             df['datahora'] = pd.to_datetime(df['datahora'])
         except Exception as e:
-            print(f"Error occurred: {e}")
-            print(df)
+            print(f"Erro: {e}")
             continue
 
-        # Step 1: Create the pivoted data
         pivot_df = df.pivot(index='datahora', columns='cod.estacao', values='valor')
-
-        # Step 2: Extract the station info and set as columns
-        stations_info = df[['cod.estacao', 'nome', 'municipio', 'latitude', 'longitude']].drop_duplicates().set_index(
-            'cod.estacao')
+        stations_info = df[['cod.estacao', 'nome', 'municipio', 'latitude', 'longitude']].drop_duplicates().set_index('cod.estacao')
 
         if combined_df is None:
             combined_df = pd.concat([stations_info.T, pivot_df], axis=0)
@@ -95,88 +53,42 @@ def request_data(inicio, fim, uf, municipio, sws_url="http://sws.cemaden.gov.br/
 
     return combined_df
 
+# Função para visualizar dados de precipitação no mapa
+def visualize_data_on_map(df):
+    station_info = df.iloc[0:5].T.dropna(how='all')
+    m = leafmap.Map(center=[-21.1, -45.0], zoom=7)
+    for index, row in station_info.iterrows():
+        m.add_marker(location=[row['latitude'], row['longitude']], popup=f"{row['nome']} ({row['municipio']})")
+    return m
 
-# Função principal do dashboard
-def main():
-    hoje = datetime.now()
+# Configuração da interface do usuário com Streamlit
+st.title("Dashboard de Precipitação - Sul de Minas Gerais")
 
-    st.set_page_config(layout="wide")
+# Seleção do intervalo de datas
+inicio = st.text_input("Data de início (formato: YYYYMMDDHHMM)", "202410180000")
+fim = st.text_input("Data de fim (formato: YYYYMMDDHHMM)", "202410202300")
 
-    st.markdown(
-        """
-        <style>
-            .main .block-container {
-                padding: 0;
-                margin: 0;
-            }
-            iframe {
-                height: 100vh !important;
-                width: 100vw !important;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+# Seleção do município
+uf = "MG"  # Estado de Minas Gerais
+municipio = st.text_input("Município", "Varginha")
 
-    # Mapa interativo usando Leafmap
-    m = leafmap.Map(center=[-18.5122, -44.5550], zoom=7, draw_control=False, measure_control=False, fullscreen_control=False, attribution_control=True)
-    
-    # Criar um cluster de marcadores para agrupar os marcadores no mapa
-    marker_cluster = MarkerCluster().add_to(m)
+# Botão para solicitar dados
+if st.button("Consultar dados"):
+    with st.spinner("Solicitando dados do CEMADEN..."):
+        df = request_data(inicio, fim, uf, municipio)
 
-    # Adicionar marcadores das estações meteorológicas em Minas Gerais no estilo fornecido
-    for i, row in gdf_mg.iterrows():
-        folium.CircleMarker(
-            location=[row['Latitude'], row['Longitude']],
-            radius=8,  # Tamanho da bolinha
-            color='blue',  # Cor da borda
-            fill=True,
-            fill_color='white',  # Cor de preenchimento
-            fill_opacity=0.6,
-            popup=f"{row['Nome']} (Código: {row['Código']})"
-        ).add_to(marker_cluster)
+    st.success("Dados carregados com sucesso!")
 
-    # Sidebar para seleção de estação e datas
-    st.sidebar.header("Filtros de Seleção")
+    # Exibe os dados em um mapa
+    st.subheader("Mapa de Precipitação")
+    m = visualize_data_on_map(df)
+    st.write(m.to_streamlit(width=700, height=500))
 
-    modo_selecao = st.sidebar.radio("Selecionar Estação por:", ('Nome'))
+    # Exibe dados de precipitação em formato de tabela
+    st.subheader("Dados de Precipitação")
+    st.dataframe(df.iloc[5:])
 
-    if modo_selecao == 'Nome':
-        estacao_selecionada = st.sidebar.selectbox("Selecione a Estação", gdf_mg['Nome'].unique())
-        codigo_estacao = gdf_mg[gdf_mg['Nome'] == estacao_selecionada]['Código'].values[0]
-
-    latitude_estacao = gdf_mg[gdf_mg['Nome'] == estacao_selecionada]['Latitude'].values[0]
-    longitude_estacao = gdf_mg[gdf_mg['Nome'] == estacao_selecionada]['Longitude'].values[0]
-
-    sigla_estado = 'MG'
-
-    # Definir intervalo de tempo para os dados horários
-    st.sidebar.subheader("Período de Dados Horários")
-    dias_opcao = st.sidebar.selectbox("Selecione o intervalo", ["Hoje", "Últimos 3 dias"])
-
-    if dias_opcao == "Hoje":
-        data_inicial = hoje
-    else:
-        data_inicial = hoje - timedelta(days=3)
-        
-    data_inicial_str = data_inicial.strftime('%Y%m%d%H%M')
-    data_final_str = hoje.strftime('%Y%m%d%H%M')
-
-    if st.sidebar.button("Mostrar Gráfico"):
-        dados_estacao = request_data(data_inicial_str, data_final_str, sigla_estado, estacao_selecionada)
-
-        if not dados_estacao.empty:
-            st.subheader(f"Gráfico de Precipitação Horária - Estação: {estacao_selecionada} (Código: {codigo_estacao})")
-
-            # Preparar os dados para o gráfico
-            dados_estacao['datahora'] = pd.to_datetime(dados_estacao['datahora'])
-            fig = px.line(dados_estacao, x=dados_estacao['datahora'], y='valor', title='Precipitação Horária', labels={'valor': 'Precipitação (mm)'})
-
-            st.plotly_chart(fig)
-        else:
-            st.warning("Nenhum dado encontrado para o período selecionado.")
-
-    m.to_streamlit()
-
-if __name__ == "__main__":
-    main()
+    # Exibe gráficos de precipitação por estação
+    st.subheader("Gráficos de Precipitação por Estação")
+    for station in df.columns[5:]:
+        st.line_chart(df[station].dropna(), width=0, height=0, use_container_width=True)
