@@ -8,3 +8,5 @@ requests
 datetime
 folium
 plotly
+io
+numpy
