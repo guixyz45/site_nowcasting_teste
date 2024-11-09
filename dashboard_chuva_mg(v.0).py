@@ -10,6 +10,7 @@ import folium
 from folium.plugins import MarkerCluster
 import plotly.express as px
 
+
 # URLs e caminhos de arquivos
 mg_shp_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
 csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
@@ -17,30 +18,6 @@ csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
 senha = 'gLs24@ImgBR!'
-
-# Recuperação do token
-token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
-login_payload = {'email': login, 'password': senha}
-response = requests.post(token_url, json=login_payload)
-
-# Verificar se a resposta é válida e contém o token
-try:
-    content = response.json()
-    if isinstance(content, list):
-        st.error("Erro na autenticação: Resposta inesperada do servidor.")
-        st.stop()
-    token = content.get('token')
-    if not token:
-        st.error("Erro na autenticação: Token não encontrado na resposta.")
-        st.stop()
-except Exception as e:
-    st.error(f"Erro na autenticação: {e}")
-    st.stop()
-
-# URL e parâmetros para a requisição inicial de dados de estações
-sws_url = 'http://sws.cemaden.gov.br/PED/rest/pcds/df_pcd'
-params = dict(rede=11, uf='MG')
-r = requests.get(sws_url, params=params, headers={'token': token})
 
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(mg_shp_url)
@@ -67,6 +44,7 @@ def request_data(inicio, fim, uf, municipio, sws_url="http://sws.cemaden.gov.br/
         r = requests.get(sws_url, params=params, headers={'token': token})
 
         # Use StringIO to create a file-like object from the response text
+        # This avoids the "File name too long" error
         data = io.StringIO(r.text)
 
         try:
@@ -86,8 +64,11 @@ def request_data(inicio, fim, uf, municipio, sws_url="http://sws.cemaden.gov.br/
             'cod.estacao')
 
         if combined_df is None:
+            # First time, we just create the combined DataFrame
             combined_df = pd.concat([stations_info.T, pivot_df], axis=0)
         else:
+            # Align columns with existing combined_df for new data
+            # Reindex columns to ensure new stations are added, old stations remain
             pivot_df = pivot_df.reindex(columns=combined_df.columns, fill_value=np.nan)
             combined_df = pd.concat([combined_df, pivot_df], axis=0)
 
@@ -99,6 +80,8 @@ def request_data(inicio, fim, uf, municipio, sws_url="http://sws.cemaden.gov.br/
 # Função principal do dashboard
 def main():
     hoje = datetime.now()
+    data_inicial = hoje.replace(day=1)
+    data_final = hoje
 
     st.set_page_config(layout="wide")
 
@@ -120,7 +103,19 @@ def main():
 
     # Mapa interativo usando Leafmap
     m = leafmap.Map(center=[-18.5122, -44.5550], zoom=7, draw_control=False, measure_control=False, fullscreen_control=False, attribution_control=True)
-    
+
+    # Adicionar o shapefile de Minas Gerais ao mapa
+    folium.GeoJson(
+        mg_gdf,
+        style_function=lambda feature: {
+            'fillColor': 'green',
+            'color': 'black',
+            'weight': 2,
+            'fillOpacity': 1
+        },
+        name='Minas Gerais'
+    ).add_to(m)
+
     # Criar um cluster de marcadores para agrupar os marcadores no mapa
     marker_cluster = MarkerCluster().add_to(m)
 
@@ -129,9 +124,9 @@ def main():
         folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
             radius=8,  # Tamanho da bolinha
-            color='blue',  # Cor da borda
+            color='purple',  # Cor da borda
             fill=True,
-            fill_color='white',  # Cor de preenchimento
+            fill_color='green',  # Cor de preenchimento
             fill_opacity=0.6,
             popup=f"{row['Nome']} (Código: {row['Código']})"
         ).add_to(marker_cluster)
@@ -150,27 +145,34 @@ def main():
 
     sigla_estado = 'MG'
 
-    # Definir intervalo de tempo para os dados horários
-    st.sidebar.subheader("Período de Dados Horários")
-    dias_opcao = st.sidebar.selectbox("Selecione o intervalo", ["Hoje", "Últimos 3 dias"])
+    tipo_busca = st.sidebar.radio("Tipo de Busca:", ('Diária', 'Mensal'))
 
-    if dias_opcao == "Hoje":
-        data_inicial = hoje
+    if tipo_busca == 'Diária':
+        data_inicial = st.sidebar.date_input("Data Inicial", value=data_inicial)
+        data_final = st.sidebar.date_input("Data Final", value=data_final)
     else:
-        data_inicial = hoje - timedelta(days=3)
-        
-    data_inicial_str = data_inicial.strftime('%Y%m%d%H%M')
-    data_final_str = hoje.strftime('%Y%m%d%H%M')
+        ano_selecionado = st.sidebar.selectbox("Selecione o Ano", range(2020, datetime.now().year + 1))
+        mes_selecionado = st.sidebar.selectbox("Selecione o Mês", range(1, 13))
+
+        data_inicial = datetime(ano_selecionado, mes_selecionado, 1)
+        data_final = datetime(ano_selecionado, mes_selecionado + 1, 1) - timedelta(days=1) if mes_selecionado != 12 else datetime(ano_selecionado, 12, 31)
 
     if st.sidebar.button("Mostrar Gráfico"):
+        data_inicial_str = data_inicial.strftime('%Y%m%d')
+        data_final_str = data_final.strftime('%Y%m%d')
         dados_estacao = request_data(data_inicial_str, data_final_str, sigla_estado, estacao_selecionada)
 
         if not dados_estacao.empty:
-            st.subheader(f"Gráfico de Precipitação Horária - Estação: {estacao_selecionada} (Código: {codigo_estacao})")
+            st.subheader(f"Gráfico de Precipitação - Estação: {estacao_selecionada} (Código: {codigo_estacao})")
 
             # Preparar os dados para o gráfico
             dados_estacao['datahora'] = pd.to_datetime(dados_estacao['datahora'])
-            fig = px.line(dados_estacao, x=dados_estacao['datahora'], y='valor', title='Precipitação Horária', labels={'valor': 'Precipitação (mm)'})
+            if tipo_busca == 'Diária':
+                dados_diarios = dados_estacao.resample('D', on='datahora').sum()
+                fig = px.line(dados_diarios, x=dados_diarios.index, y='valor', title='Precipitação Diária', labels={'valor': 'Precipitação (mm)'})
+            else:
+                dados_mensais = dados_estacao.resample('M', on='datahora').sum()
+                fig = px.bar(dados_mensais, x=dados_mensais.index, y='valor', title='Precipitação Mensal', labels={'valor': 'Precipitação (mm)'})
 
             st.plotly_chart(fig)
         else:
