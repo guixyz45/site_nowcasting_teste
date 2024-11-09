@@ -12,7 +12,7 @@ import plotly.express as px
 
 # URLs e caminhos de arquivos
 mg_shp_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
-csv_file_path = 'input/lista_das_estacoes_CEMADEN_13maio2024.csv'
+csv_file_path = 'input;/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
