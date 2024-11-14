@@ -128,14 +128,14 @@ def main():
     # Sidebar para seleção de estação e datas
     st.sidebar.header("Filtros de Seleção")
 
-    modo_selecao = st.sidebar.radio("Selecionar Estação por:", ('Nome'))
+    modo_selecao = st.sidebar.radio("Selecionar Estação por:", ('Código'))
 
-    if modo_selecao == 'Nome':
-        estacao_selecionada = st.sidebar.selectbox("Selecione a Estação", gdf_mg['Nome'].unique())
+    if modo_selecao == 'Código':
+        estacao_selecionada = st.sidebar.selectbox("Selecione a Estação", gdf_mg['Código'].unique())
         codigo_estacao = gdf_mg[gdf_mg['Nome'] == estacao_selecionada]['Código'].values[0]
 
-    latitude_estacao = gdf_mg[gdf_mg['Nome'] == estacao_selecionada]['Latitude'].values[0]
-    longitude_estacao = gdf_mg[gdf_mg['Nome'] == estacao_selecionada]['Longitude'].values[0]
+    latitude_estacao = gdf_mg[gdf_mg['Código'] == estacao_selecionada]['Latitude'].values[0]
+    longitude_estacao = gdf_mg[gdf_mg['Código'] == estacao_selecionada]['Longitude'].values[0]
 
     sigla_estado = 'MG'
 
