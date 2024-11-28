@@ -12,7 +12,7 @@ import plotly.express as px
 
 # URLs e caminhos de arquivos
 mg_shp_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
-csv_file_path = 'input;/estacoes_sul_minas_gerais.csv'
+csv_file_path = 'input/lista_das_estacoes_CEMADEN_13maio2024.csv'
 
 # Login e senha do CEMADEN (previamente fornecidos)
 login = 'd2020028915@unifei.edu.br'
@@ -32,13 +32,21 @@ mg_gdf = gpd.read_file(mg_shp_url)
 df = pd.read_csv(csv_file_path)
 gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['Longitude'], df['Latitude']))
 
-# Realizar o filtro espacial: apenas estações dentro de Minas Gerais
+# Filtrar apenas as estações dentro de Minas Gerais
 gdf_mg = gpd.sjoin(gdf, mg_gdf, predicate='within')
+
+# Lista das estações desejadas
+codigo_estacao = ['314790701A', '310710901A', '312870901A', '315180001A', '316930701A',
+                  '314780801A', '315250101A', '313240401A', '313360001A', '311410501A',
+                  '316230201A', '313300601A']
+
+# Filtrar as estações desejadas no GeoDataFrame
+gdf_mg = gdf_mg[gdf_mg['Código'].isin(codigo_estacao)]
 
 # Função de solicitação de dados de precipitação
 def request_data(inicio, fim, uf, municipio, sws_url="http://sws.cemaden.gov.br/PED/rest/pcds/dados_rede"):
-    date = datetime.strptime(inicio, "%Y%m%d%H%M")  # Convert inicio to datetime object
-    fim = datetime.strptime(fim, "%Y%m%d%H%M")    # Convert fim to datetime object
+    date = datetime.strptime(inicio, "%Y%m%d%H%M")
+    fim = datetime.strptime(fim, "%Y%m%d%H%M")
     combined_df = None
 
     while date <= fim:
@@ -48,9 +56,6 @@ def request_data(inicio, fim, uf, municipio, sws_url="http://sws.cemaden.gov.br/
         params = dict(sensor=10, uf=uf, municipio=municipio, inicio=start_date, fim=end_date, formato="json")
 
         r = requests.get(sws_url, params=params, headers={'token': token})
-
-        # Use StringIO to create a file-like object from the response text
-        # This avoids the "File name too long" error
         data = io.StringIO(r.text)
 
         try:
@@ -59,22 +64,14 @@ def request_data(inicio, fim, uf, municipio, sws_url="http://sws.cemaden.gov.br/
             df['datahora'] = pd.to_datetime(df['datahora'])
         except Exception as e:
             print(f"Error occurred: {e}")
-            print(df)
             continue
 
-        # Step 1: Create the pivoted data
         pivot_df = df.pivot(index='datahora', columns='cod.estacao', values='valor')
-
-        # Step 2: Extract the station info and set as columns
-        stations_info = df[['cod.estacao', 'nome', 'municipio', 'latitude', 'longitude']].drop_duplicates().set_index(
-            'cod.estacao')
+        stations_info = df[['cod.estacao', 'nome', 'municipio', 'latitude', 'longitude']].drop_duplicates().set_index('cod.estacao')
 
         if combined_df is None:
-            # First time, we just create the combined DataFrame
             combined_df = pd.concat([stations_info.T, pivot_df], axis=0)
         else:
-            # Align columns with existing combined_df for new data
-            # Reindex columns to ensure new stations are added, old stations remain
             pivot_df = pivot_df.reindex(columns=combined_df.columns, fill_value=np.nan)
             combined_df = pd.concat([combined_df, pivot_df], axis=0)
 
@@ -113,7 +110,7 @@ def main():
     # Criar um cluster de marcadores para agrupar os marcadores no mapa
     marker_cluster = MarkerCluster().add_to(m)
 
-    # Adicionar marcadores das estações meteorológicas em Minas Gerais no estilo fornecido
+    # Adicionar marcadores das estações meteorológicas selecionadas
     for i, row in gdf_mg.iterrows():
         folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
@@ -128,14 +125,9 @@ def main():
     # Sidebar para seleção de estação e datas
     st.sidebar.header("Filtros de Seleção")
 
-    modo_selecao = st.sidebar.radio("Selecionar Estação por:", ('Código'))
-
-    if modo_selecao == 'Código':
-        estacao_selecionada = st.sidebar.selectbox("Selecione a Estação", gdf_mg['Código'].unique())
-        codigo_estacao = gdf_mg[gdf_mg['Código'] == estacao_selecionada]['Código'].values[0]
-
-    latitude_estacao = gdf_mg[gdf_mg['Código'] == estacao_selecionada]['Latitude'].values[0]
-    longitude_estacao = gdf_mg[gdf_mg['Código'] == estacao_selecionada]['Longitude'].values[0]
+    # Adicionar dropdown com a lista de estações filtradas
+    estacao_selecionada = st.sidebar.selectbox("Selecione a Estação", gdf_mg['Nome'].unique())
+    codigo_estacao_selecionada = gdf_mg[gdf_mg['Nome'] == estacao_selecionada]['Código'].values[0]
 
     sigla_estado = 'MG'
 
@@ -147,9 +139,8 @@ def main():
     else:
         ano_selecionado = st.sidebar.selectbox("Selecione o Ano", range(2020, datetime.now().year + 1))
         mes_selecionado = st.sidebar.selectbox("Selecione o Mês", range(1, 13))
-
         data_inicial = datetime(ano_selecionado, mes_selecionado, 1)
-        data_final = datetime(ano_selecionado, mes_selecionado + 1, 1) - timedelta(days=1) if mes_selecionado != 12 else datetime(ano_selecionado, 12, 31)
+        data_final = (datetime(ano_selecionado, mes_selecionado + 1, 1) - timedelta(days=1)) if mes_selecionado != 12 else datetime(ano_selecionado, 12, 31)
 
     if st.sidebar.button("Mostrar Gráfico"):
         data_inicial_str = data_inicial.strftime('%Y%m%d%H%M')
@@ -157,7 +148,7 @@ def main():
         dados_estacao = request_data(data_inicial_str, data_final_str, sigla_estado, estacao_selecionada)
 
         if not dados_estacao.empty:
-            st.subheader(f"Gráfico de Precipitação - Estação: {estacao_selecionada} (Código: {codigo_estacao})")
+            st.subheader(f"Gráfico de Precipitação - Estação: {estacao_selecionada} (Código: {codigo_estacao_selecionada})")
 
             dados_estacao['datahora'] = pd.to_datetime(dados_estacao['datahora'])
             if tipo_busca == 'Diária':
