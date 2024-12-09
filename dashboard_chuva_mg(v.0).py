@@ -76,13 +76,22 @@ if st.sidebar.button("Baixar Dados"):
 else:
     dados_baixados = st.session_state.get('dados_baixados', {})
 
-# Adicionar marcadores no mapa
+# Adicionar marcadores no mapa para as estações
+for _, row in gdf_mg.iterrows():
+    folium.Marker(
+        location=[row['latitude'], row['longitude']],
+        popup=f"Município: {row['municipio']}<br>Código: {row['codEstacao']}",
+        icon=folium.Icon(color='blue', icon='info-sign')
+    ).add_to(m)
+
+# Adicionar marcadores de precipitação no mapa
 if dados_baixados:
     for codigo, df in dados_baixados.items():
         latitude = gdf_mg[gdf_mg['codEstacao'] == codigo]['latitude'].values[0]
         longitude = gdf_mg[gdf_mg['codEstacao'] == codigo]['longitude'].values[0]
         chuva_total = df['valor'].sum()
 
+        # Determinar a cor do marcador com base na chuva total
         if chuva_total <= 10:
             color = 'green'
         elif chuva_total <= 50:
