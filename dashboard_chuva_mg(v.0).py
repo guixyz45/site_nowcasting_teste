@@ -108,6 +108,14 @@ if dados_baixados:
             popup=f"Estação: {codigo}<br>Chuva Total: {chuva_total:.2f} mm"
         ).add_to(m)
 
+# Adicionar legenda no Streamlit
+st.sidebar.subheader("Legenda:")
+st.sidebar.markdown("""
+- **Verde**: Chuva ≤ 10 mm  
+- **Laranja**: Chuva > 10 mm e ≤ 50 mm  
+- **Vermelho**: Chuva > 50 mm
+""")
+
 # Exibir o mapa
 m.to_streamlit(width=1300, height=775)
 
