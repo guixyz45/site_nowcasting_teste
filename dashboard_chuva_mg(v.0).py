@@ -46,37 +46,41 @@ st.set_page_config(layout="wide")
 # Data de hoje
 agora = datetime.now()
 
-# Função para baixar dados das estações
-def baixar_dados_estacoes(codigo_estacao, data_especifica, sigla_estado):
-    dados_estacoes = {}
-    for codigo in codigo_estacao:
-        sws_url = 'http://sws.cemaden.gov.br/PED/rest/pcds/dados_pcd'
-        params = dict(rede=11, uf=sigla_estado, inicio=data_especifica, fim=data_especifica, codigo=codigo)
-        r = requests.get(sws_url, params=params, headers={'token': token})
-        dados = r.text
-        linhas = dados.split("\n")
-        dados_filtrados = "\n".join(linhas[1:])
-        df = pd.read_csv(StringIO(dados_filtrados), sep=";")
-        if not df.empty:
-            df['datahora'] = pd.to_datetime(df['datahora'])
-            df = df.set_index('datahora')
-            dados_estacoes[codigo] = df
-    return dados_estacoes
+# Função para baixar dados da estação
+def baixar_dados_estacoes(codigo, data_especifica, sigla_estado):
+    sws_url = 'http://sws.cemaden.gov.br/PED/rest/pcds/dados_pcd'
+    params = dict(rede=11, uf=sigla_estado, inicio=data_especifica, fim=data_especifica, codigo=codigo)
+    r = requests.get(sws_url, params=params, headers={'token': token})
+    dados = r.text
+    linhas = dados.split("\n")
+    dados_filtrados = "\n".join(linhas[1:])
+    df = pd.read_csv(StringIO(dados_filtrados), sep=";")
+    if not df.empty:
+        df['datahora'] = pd.to_datetime(df['datahora'])
+        df = df.set_index('datahora')
+        return df
+    return pd.DataFrame()
 
 # Configuração do mapa
 m = leafmap.Map(center=[-21, -45], zoom_start=8, draw_control=False, measure_control=False)
 
 # Barra lateral
 st.sidebar.header("Filtros de Seleção")
+
+# Opção de seleção da estação
+estacao_selecionada = st.sidebar.selectbox("Selecione a Estação (Código)", codigo_estacao)
+
+# Seleção da data
 data_especifica = st.sidebar.date_input("Selecione a Data", value=datetime.now()).strftime('%Y%m%d')
 
+# Botão para baixar dados
 if st.sidebar.button("Baixar Dados"):
-    dados_baixados = baixar_dados_estacoes(codigo_estacao, data_especifica, 'MG')
+    dados_baixados = baixar_dados_estacoes(estacao_selecionada, data_especifica, 'MG')
     st.session_state['dados_baixados'] = dados_baixados
 else:
-    dados_baixados = st.session_state.get('dados_baixados', {})
+    dados_baixados = st.session_state.get('dados_baixados', pd.DataFrame())
 
-# Adicionar marcadores no mapa para as estações
+# Adicionar marcadores no mapa para todas as estações
 for _, row in gdf_mg.iterrows():
     folium.Marker(
         location=[row['latitude'], row['longitude']],
@@ -84,45 +88,31 @@ for _, row in gdf_mg.iterrows():
         icon=folium.Icon(color='blue', icon='info-sign')
     ).add_to(m)
 
-# Adicionar marcadores de precipitação no mapa
-if dados_baixados:
-    for codigo, df in dados_baixados.items():
-        latitude = gdf_mg[gdf_mg['codEstacao'] == codigo]['latitude'].values[0]
-        longitude = gdf_mg[gdf_mg['codEstacao'] == codigo]['longitude'].values[0]
-        chuva_total = df['valor'].sum()
+# Adicionar marcador específico para a estação selecionada
+if not dados_baixados.empty:
+    latitude = gdf_mg[gdf_mg['codEstacao'] == estacao_selecionada]['latitude'].values[0]
+    longitude = gdf_mg[gdf_mg['codEstacao'] == estacao_selecionada]['longitude'].values[0]
+    chuva_total = dados_baixados['valor'].sum()
 
-        # Determinar a cor do marcador com base na chuva total
-        if chuva_total <= 10:
-            color = 'green'
-        elif chuva_total <= 50:
-            color = 'orange'
-        else:
-            color = 'red'
+    folium.Marker(
+        location=[latitude, longitude],
+        popup=f"Estação: {estacao_selecionada}<br>Chuva Total: {chuva_total:.2f} mm",
+        icon=folium.Icon(color='green', icon='cloud')
+    ).add_to(m)
 
-        folium.CircleMarker(
-            location=[latitude, longitude],
-            radius=10,
-            color=color,
-            fill=True,
-            fill_opacity=0.7,
-            popup=f"Estação: {codigo}<br>Chuva Total: {chuva_total:.2f} mm"
-        ).add_to(m)
-
-# Adicionar legenda no Streamlit
+# Adicionar legenda na barra lateral
 st.sidebar.subheader("Legenda:")
 st.sidebar.markdown("""
-- **Verde**: Chuva ≤ 10 mm  
-- **Laranja**: Chuva > 10 mm e ≤ 50 mm  
-- **Vermelho**: Chuva > 50 mm
+- **Azul**: Estações cadastradas  
+- **Verde**: Estação selecionada e dados disponíveis
 """)
 
 # Exibir o mapa
 m.to_streamlit(width=1300, height=775)
 
-# Mostrar os dados da estação
-if dados_baixados:
-    for codigo, df in dados_baixados.items():
-        st.subheader(f"Dados da Estação: {codigo}")
-        st.dataframe(df)
+# Mostrar os dados da estação selecionada
+if not dados_baixados.empty:
+    st.subheader(f"Dados da Estação: {estacao_selecionada}")
+    st.dataframe(dados_baixados)
 else:
     st.warning("Nenhum dado encontrado para a data selecionada.")
