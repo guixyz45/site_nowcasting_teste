@@ -1,3 +1,5 @@
+# Importações e configurações existentes (não alteradas)
+
 import streamlit as st
 import pandas as pd
 import geopandas as gpd
@@ -23,7 +25,7 @@ senha = 'gLs24@ImgBr!'
 # Carregar os dados do shapefile de Minas Gerais
 mg_gdf = gpd.read_file(shp_mg_url)
 
-# Estações Selecionadas
+# Estações Selecionadas do Sul de Minas Gerais
 codigo_estacao = ['314790701A', '310710901A', '312870901A', '315180001A', '316930702A', '314780801A', 
                   '315250101A', '313240401A', '313360001A', '311410501A', '311360201A', '313300601A']
 
@@ -31,20 +33,8 @@ codigo_estacao = ['314790701A', '310710901A', '312870901A', '315180001A', '31693
 df1 = pd.read_csv(csv_file_path)
 gdf = gpd.GeoDataFrame(df1, geometry=gpd.points_from_xy(df1['longitude'], df1['latitude']))
 
-# Filtrar para Minas Gerais
+# Realizar o filtro espacial: apenas estações dentro de Minas Gerais
 gdf_mg = gpd.sjoin(gdf, mg_gdf, predicate='within')
-
-# Configuração de página
-st.set_page_config(layout="wide")
-
-# Map
-m = leafmap.Map(center=[-21, -45], zoom_start=8)
-
-for i, row in gdf_mg.iterrows():
-    folium.Marker(
-        [row['latitude'], row['longitude']],
-        popup=f"Estação: {row['municipio']} (Código: {row['codEstacao']})"
-    ).add_to(m)
 
 # Recuperação do token
 token_url = 'http://sgaa.cemaden.gov.br/SGAA/rest/controle-token/tokens'
@@ -53,8 +43,27 @@ response = requests.post(token_url, json=login_payload)
 content = response.json()
 token = content['token']
 
-# Função para baixar os dados
-def baixar_dados_estacoes(codigo_estacao, data_inicial, data_final, sigla_estado='MG'):
+# Configuração de datas iniciais
+agora = datetime.now()
+dia_atual = agora.day
+mes_atual = agora.month
+ano_atual = agora.year
+
+if mes_atual == 1:
+    mes_anterior = 12
+    ano_anterior = ano_atual - 1
+else:
+    mes_anterior = mes_atual - 1
+    ano_anterior = ano_atual
+
+diai = '01'
+data_inicial = f'{ano_atual}{mes_anterior:02d}{diai}'
+data_final = f'{ano_atual}{mes_atual:02d}{dia_atual:02d}'
+data_inicial = pd.to_datetime(data_inicial)
+data_final = pd.to_datetime(data_final)
+
+# Função existente para baixar dados
+def baixar_dados_estacoes(codigo_estacao, data_inicial, data_final, sigla_estado):
     dados_estacoes = {}
     for codigo in codigo_estacao:
         dados_completos = []
@@ -72,46 +81,46 @@ def baixar_dados_estacoes(codigo_estacao, data_inicial, data_final, sigla_estado
             dados_estacoes[codigo] = pd.concat(dados_completos)
     return dados_estacoes
 
-# Baixar dados
-data_inicial = datetime.now() - timedelta(days=30)
-data_final = datetime.now()
-dados_estacoes = baixar_dados_estacoes(codigo_estacao, data_inicial, data_final)
+# Dados baixados (conforme código original)
+dados2 = baixar_dados_estacoes(codigo_estacao, data_inicial, data_final, 'MG')
 
-# Sidebar
-st.sidebar.header("Filtros")
+# Sidebar para seleção de estação e controle do gráfico
+st.sidebar.header("Filtros de Seleção")
 estacao_selecionada = st.sidebar.selectbox(
-    "Selecione uma estação", 
-    options=gdf_mg['codEstacao'].unique()
+    "Selecione a Estação", gdf_mg['codEstacao'].unique()
 )
-exibir_grafico = st.sidebar.checkbox("Exibir gráfico de precipitação")
+mostrar_grafico = st.sidebar.checkbox("Mostrar gráfico")
 
-# Mostrar dados da estação selecionada
-if estacao_selecionada:
-    st.subheader(f"Estação Selecionada: {estacao_selecionada}")
-    if estacao_selecionada in dados_estacoes:
-        df_estacao = dados_estacoes[estacao_selecionada]
-        st.write(df_estacao.head())
-    else:
-        st.warning("Nenhum dado encontrado para a estação selecionada.")
+# Exibição dos dados da estação selecionada
+st.subheader(f"Dados da Estação: {estacao_selecionada}")
+if estacao_selecionada in dados2:
+    df_selecionado = dados2[estacao_selecionada]
+    st.write(df_selecionado.head())  # Exibe os primeiros dados da estação selecionada
 
-# Mostrar gráfico
-if exibir_grafico and estacao_selecionada in dados_estacoes:
-    df_estacao = dados_estacoes[estacao_selecionada]
-    df_estacao['datahora'] = pd.to_datetime(df_estacao['datahora'])
-    df_estacao.set_index('datahora', inplace=True)
-    df_precipitacao = df_estacao[df_estacao['sensor'] == 'precipitacao']
-    
-    # Agregação dos dados
+# Adição da funcionalidade de gráficos (nova)
+if mostrar_grafico and estacao_selecionada in dados2:
+    st.subheader(f"Gráfico de Precipitação - Estação {estacao_selecionada}")
+    df_selecionado['datahora'] = pd.to_datetime(df_selecionado['datahora'])
+    df_selecionado = df_selecionado.set_index('datahora')
+    df_precipitacao = df_selecionado[df_selecionado['sensor'] == 'precipitacao']
+
+    # Agregar os dados por dia
     df_precipitacao_resample = df_precipitacao['valor'].resample('D').sum()
-    
-    # Criar gráfico
+
+    # Gerar gráfico
     fig, ax = plt.subplots(figsize=(10, 5))
     df_precipitacao_resample.plot(ax=ax, color='blue', label='Precipitação Diária')
-    ax.set_title(f"Precipitação Diária - {estacao_selecionada}")
+    ax.set_title(f"Precipitação Diária - Estação {estacao_selecionada}")
     ax.set_ylabel("Precipitação (mm)")
     ax.set_xlabel("Data")
     ax.legend()
     st.pyplot(fig)
 
-# Mostrar mapa
-m.to_streamlit(width=700, height=500)
+# Mapa com folium (código original)
+m = leafmap.Map(center=[-21, -45], zoom_start=8)
+for i, row in gdf_mg.iterrows():
+    folium.Marker(
+        [row['latitude'], row['longitude']],
+        popup=f"Estação: {row['municipio']} (Código: {row['codEstacao']})"
+    ).add_to(m)
+m.to_streamlit(width=1300, height=775)
