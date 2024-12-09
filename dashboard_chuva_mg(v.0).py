@@ -80,13 +80,28 @@ if st.sidebar.button("Baixar Dados"):
 else:
     dados_baixados = st.session_state.get('dados_baixados', pd.DataFrame())
 
-# Adicionar marcadores no mapa para todas as estações
-for _, row in gdf_mg.iterrows():
-    folium.Marker(
+# Adicionar marcadores das estações meteorológicas
+for i, row in gdf_mg.iterrows():    
+    # Adicionar marcador com valor
+    folium.RegularPolygonMarker(
         location=[row['latitude'], row['longitude']],
-        popup=f"Município: {row['municipio']}<br>Código: {row['codEstacao']}",
-        icon=folium.Icon(color='blue', icon='info-sign')
+        color='black',
+        opacity=1,
+        weight=1,
+        fillColor='green',
+        fillOpacity=1,
+        numberOfSides=4,
+        rotation=45,
+        radius=8,
+        popup=f"{row['municipio']} (Código: {row['codEstacao']})"
     ).add_to(m)
+
+m.add_gdf(
+    mg_gdf, 
+    layer_name="Minas Gerais", 
+    style={"color": "black", "weight": 1, "fillOpacity": 0, "interactive": False},
+    info_mode=None
+)
 
 # Adicionar marcador específico para a estação selecionada
 if not dados_baixados.empty:
