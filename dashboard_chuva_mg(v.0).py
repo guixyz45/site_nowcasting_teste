@@ -24,9 +24,7 @@ senha = 'Flaviobr123!'
 mg_gdf = gpd.read_file(shp_mg_url)
 
 # Estações Selecionadas do Sul de Minas Gerais
-# codigo_estacao = ['314790701A','310710901A','312870901A','315180001A','316930702A','314780801A','315250101A','313240401A','313360001A','311410501A','311360201A','313300601A']
-codigo_estacao = ['315180001A','316930702A']
-
+codigo_estacao = ['314790701A','310710901A','312870901A','315180001A','316930702A','314780801A','315250101A','313240401A','313360001A','311410501A','311360201A','313300601A']
 
 # Carregar os dados das estações
 df1 = pd.read_csv(csv_file_path)
@@ -85,7 +83,7 @@ def baixar_dados_estacoes(codigo_estacao, data_inicial, data_final, sigla_estado
             params = dict(
                 rede=11, uf=sigla_estado, inicio=ano_mes, fim=ano_mes, codigo=codigo
             )
-            
+
             # Requisição dos dados
             r = requests.get(sws_url, params=params, headers={'token': token})
             dados = r.text
@@ -93,15 +91,8 @@ def baixar_dados_estacoes(codigo_estacao, data_inicial, data_final, sigla_estado
             # Remover a linha de comentário e converter para DataFrame
             linhas = dados.split("\n")
             dados_filtrados = "\n".join(linhas[1:])  # Remove a primeira linha (comentário)
-            
+
             df = pd.read_csv(StringIO(dados_filtrados), sep=";")
-
-            # Filtra somente os dados de chuva
-            df = df[df['sensor'] == 'chuva']
-
-            # Converte e organiza os dados
-            df['datahora'] = pd.to_datetime(df['datahora'])
-            df.set_index('datahora', inplace=True)
 
             # Armazena os dados no acumulado
             dados_completos.append(df)
@@ -113,55 +104,80 @@ def baixar_dados_estacoes(codigo_estacao, data_inicial, data_final, sigla_estado
     return dados_estacoes
 
 # Função para exibir gráficos de precipitação
-def mostrar_graficos():
-    horas = ['Última Hora', '24 Horas', '48 Horas']
-    chuva_valores = [dfuma, soma_ultimas_24h, soma_ultimas_48h]
+def mostrar_graficos(codigo_estacao):
+    # Verificar se o código da estação existe no dicionário
+    if codigo_estacao not in somas_por_estacao:
+        st.error(f"Estação {codigo_estacao} não encontrada.")
+        return
+    
+    # Obter os valores para a estação selecionada
+    soma_dia_atual = somas_por_estacao[codigo_estacao]["dia_atual"]
+    soma_24h = somas_por_estacao[codigo_estacao]["ultimas_24h"]
+    soma_48h = somas_por_estacao[codigo_estacao]["ultimas_48h"]
+    
+    # Preparar os dados para o gráfico
+    horas = ['Dia Atual', '24 Horas', '48 Horas']
+    chuva_valores = [soma_dia_atual, soma_24h, soma_48h]
 
-    fig, ax = plt.subplots(figsize=(3, 2))
+    # Criar o gráfico
+    fig, ax = plt.subplots(figsize=(5, 3))
     ax.bar(horas, chuva_valores, color=['blue', 'orange', 'green'])
     ax.set_ylabel('Precipitação (mm)')
-    ax.set_title('Precipitação nas últimas horas')
+    ax.set_title(f'Precipitação para a Estação {codigo_estacao}')
 
+    # Exibir o gráfico no Streamlit
     st.pyplot(fig)
-# Função para exibir o pop-up no canto inferior direito
-def exibir_popup(chuva_ultima_hora, chuva_ultimas_24_horas, chuva_ultimas_48_horas):
-    st.markdown("""
-    <style>
-        .popup {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 250px;
-            background-color: rgba(255, 255, 255, 0.8);
-            color: black;
-            padding: 10px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            font-family: Arial, sans-serif;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # Conteúdo do popup
-    st.markdown(f"""
-    <div class="popup">
-        <h4>Informações de Chuva</h4>
-        <p>Chuva na última hora: {dfuma} mm</p>
-        <p>Chuva nas últimas 24 horas: {soma_ultimas_24h} mm</p>
-        <p>Chuva nas últimas 48 horas: {soma_ultimas_48h} mm</p>
-    </div>
-    """, unsafe_allow_html=True)
     
 m = leafmap.Map(center=[-21, -45],zoom_start = 8,draw_control=False, measure_control=False, fullscreen_control=False, attribution_control=True)
 
 # Defina o layout da página como largo
 st.set_page_config(layout="wide")
 
-# Adicionar marcadores das estações meteorológicas
-for i, row in gdf_mg.iterrows():
-    # Baixar dados da estação
-    dados = baixar_dados_estacoes(codigo_estacao, data_inicial, data_final, sigla_estado)
+# Baixar dados da estação
+dados1 = baixar_dados_estacoes(codigo_estacao, data_inicial, data_final, sigla_estado)
 
+# Remover chave se o valor for vazio (DataFrame vazio)
+for codigo in list(dados1.keys()):
+    valor = dados1[codigo]
+
+    if isinstance(valor, pd.DataFrame) and valor.empty:
+        del dados1[codigo]  # Remove a chave se for um DataFrame vazio
+dados2 = {}
+for codigo in dados1.keys():
+  df = dados1[codigo][dados1[codigo]['sensor'] != 'intensidade_precipitacao']
+  df['datahora'] = pd.to_datetime(df['datahora'])
+  df = df.set_index('datahora')
+  dados2[codigo] = df
+
+# Criação do dicionário para armazenar os resultados
+somas_por_estacao = {}
+
+# Data/hora atual para referência
+agora = datetime.now()
+
+# Iterar sobre os dataframes em dados2
+for codigo_estacao, df in dados2.items():
+    # Garantir que o index esteja no formato datetime
+    df.index = pd.to_datetime(df.index)
+    
+    # Filtrar os dados para o dia atual, últimas 24 horas e últimas 48 horas
+    inicio_dia_atual = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+    inicio_24h = agora - timedelta(hours=24)
+    inicio_48h = agora - timedelta(hours=48)
+    
+    soma_dia_atual = df.loc[df.index >= inicio_dia_atual, 'valor'].sum()
+    soma_24h = df.loc[df.index >= inicio_24h, 'valor'].sum()
+    soma_48h = df.loc[df.index >= inicio_48h, 'valor'].sum()
+    
+    # Armazenar os resultados em somas_por_estacao
+    somas_por_estacao[codigo_estacao] = {
+        "dia_atual": soma_dia_atual,
+        "ultimas_24h": soma_24h,
+        "ultimas_48h": soma_48h
+    }
+
+# Adicionar marcadores das estações meteorológicas
+for i, row in gdf_mg.iterrows():    
     # Adicionar marcador com valor
     folium.RegularPolygonMarker(
         location=[row['latitude'], row['longitude']],
@@ -186,11 +202,13 @@ m.add_gdf(
 st.sidebar.header("Filtros de Seleção")
 modo_selecao = st.sidebar.radio("Selecionar Estação por:", ('Código'))
 
+# Seleção da estação
 if modo_selecao == 'Código':
     estacao_selecionada = st.sidebar.selectbox("Selecione a Estação", gdf_mg['codEstacao'].unique())
+    # Certifique-se de que o código da estação é extraído corretamente
     codigo_estacao = gdf_mg[gdf_mg['codEstacao'] == estacao_selecionada]['codEstacao'].values[0]
 
-sigla_estado = 'MG'
+# Adicionar um controle para "Recarregar Dados" quando a data for alterada
 tipo_busca = st.sidebar.radio("Tipo de Busca:", ('Diária'))
 
 if tipo_busca == 'Diária':
@@ -200,6 +218,26 @@ else:
     mes_selecionado = st.sidebar.selectbox("Selecione o Mês", range(1, 13))
     data_inicial = datetime(ano_selecionado, mes_selecionado, 1)
     data_final = datetime(ano_selecionado, mes_selecionado + 1, 1) - timedelta(days=1) if mes_selecionado != 12 else datetime(ano_selecionado, 12, 31)
+
+# Adicionar um controle de flag para verificar se os dados precisam ser recarregados
+data_inicial_str = data_inicial.strftime('%Y%m%d')
+data_final_str = data_final.strftime('%Y%m%d')
+
+# Verificar se os dados já estão carregados
+if 'dados_baixados' not in st.session_state or st.session_state.data_inicial != data_inicial_str or st.session_state.data_final != data_final_str:
+    # Se os dados não estão carregados ou a data foi alterada, atualize os dados
+    st.session_state.dados_baixados = baixar_dados_estacoes(codigo_estacao, data_inicial, data_final, sigla_estado)
+    st.session_state.data_inicial = data_inicial_str
+    st.session_state.data_final = data_final_str
+
+# Exibir os dados baixados
+dados_baixados = st.session_state.dados_baixados
+
+if dados_baixados:
+    st.subheader(f"Dados da Estação: {estacao_selecionada} (Código: {codigo_estacao})")
+    st.write(dados_baixados)
+else:
+    st.warning("Nenhum dado encontrado para o período selecionado.")
 
 if st.sidebar.button("Baixar Dados"):
     data_inicial_str = data_inicial.strftime('%Y%m%d')
@@ -217,10 +255,11 @@ mostrar = st.sidebar.checkbox("Gráfico de Precipitação")
 
 # Exibir ou ocultar o gráfico conforme o estado do checkbox
 if mostrar:
-    mostrar_graficos()
-st.dataframe(dados)
-
+    # Exibir o gráfico para a estação selecionada
+    mostrar_graficos(codigo_estacao)
 # Mostrar o mapa em Streamlit
 m.to_streamlit(width=1300,height=775)
-# Chamando a função para exibir o popup
-exibir_popup(chuva_ultima_hora, chuva_ultimas_24_horas, chuva_ultimas_48_horas)
+
+st.write(somas_por_estacao)
+
+st.write(dados2)
