@@ -5,9 +5,12 @@ import requests
 import numpy as np
 from datetime import datetime, timedelta
 import leafmap.foliumap as leafmap
+import folium
+import glob
+import calendar
+from io import StringIO
 import matplotlib.pyplot as plt
 from folium.plugins import MarkerCluster
-from io import StringIO
 
 # URLs e caminhos de arquivos
 shp_mg_url = 'https://github.com/giuliano-macedo/geodata-br-states/raw/main/geojson/br_states/br_mg.json'
