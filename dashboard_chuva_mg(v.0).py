@@ -115,11 +115,12 @@ if not dados_baixados.empty:
         icon=folium.Icon(color='green', icon='cloud')
     ).add_to(m)
 
-# Adicionar legenda na barra lateral
+# Adicionar legenda no Streamlit
 st.sidebar.subheader("Legenda:")
 st.sidebar.markdown("""
-- **Azul**: Estações cadastradas  
-- **Verde**: Estação selecionada e dados disponíveis
+- **Verde**: Chuva ≤ 10 mm  
+- **Laranja**: Chuva > 10 mm e ≤ 50 mm  
+- **Vermelho**: Chuva > 50 mm
 """)
 
 # Exibir o mapa
